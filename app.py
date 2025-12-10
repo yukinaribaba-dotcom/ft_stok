@@ -30,7 +30,7 @@ except Exception as e:
 # Geminiモデルの初期化
 @st.cache_resource
 def get_model():
-    return genai.GenerativeModel('gemini-1.5-flash')
+    return genai.GenerativeModel('gemini-2.5-flash')
 
 model = get_model()
 
@@ -631,7 +631,7 @@ st.markdown("---")
 st.markdown(
     """
     <div style='text-align: center; color: gray;'>
-    <small>医療ハッカソン デモアプリ | 実際の初診カルテ形式に準拠 | Powered by Google Gemini 1.5 Flash</small>
+    <small>医療ハッカソン デモアプリ | 実際の初診カルテ形式に準拠 | Powered by Google Gemini 2.5 Flash</small>
     </div>
     """,
     unsafe_allow_html=True
