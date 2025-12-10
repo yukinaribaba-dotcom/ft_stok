@@ -30,7 +30,7 @@ except Exception as e:
 # Geminiモデルの初期化
 @st.cache_resource
 def get_model():
-    return genai.GenerativeModel('gemini-1.5-pro')
+    return genai.GenerativeModel('gemini-1.5-pro-latest')
 
 model = get_model()
 
