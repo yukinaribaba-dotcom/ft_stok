@@ -275,7 +275,8 @@ def extract_info_from_multiple_files(files: List) -> Dict[str, Any]:
             img_byte_arr = io.BytesIO()
             img.save(img_byte_arr, format='PNG')
             img_byte_arr.seek(0)
-            uploaded_img = client.files.upload(file=img_byte_arr)
+            # MIMEタイプを明示的に指定
+            uploaded_img = client.files.upload(file=img_byte_arr, mime_type="image/png")
             uploaded_images.append(uploaded_img)
 
         # コンテンツを作成
