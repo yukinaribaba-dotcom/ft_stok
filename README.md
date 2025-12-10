@@ -190,7 +190,7 @@ streamlit run app_improved.py
 ## 技術スタック
 
 - **Frontend**: Streamlit
-- **AI Model**: Google Gemini 2.0 Flash (最新モデル)
+- **AI Model**: Google Gemini 1.5 Flash
 - **Image Processing**: Pillow (PIL)
 - **Data Display**: Pandas
 

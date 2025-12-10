@@ -9,7 +9,10 @@
       "Bash(sudo apt-get update:*)",
       "Bash(sudo apt-get install:*)",
       "Bash(streamlit run:*)",
-      "Bash(STREAMLIT_SERVER_HEADLESS=true streamlit run:*)"
+      "Bash(STREAMLIT_SERVER_HEADLESS=true streamlit run:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []
