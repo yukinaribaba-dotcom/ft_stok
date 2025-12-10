@@ -7,6 +7,7 @@ import pandas as pd
 from typing import Dict, Any, List
 import io
 import os
+import base64
 
 # ページ設定
 st.set_page_config(
@@ -268,24 +269,28 @@ def extract_info_from_multiple_files(files: List) -> Dict[str, Any]:
             st.error("画像の読み込みに失敗しました")
             return None
 
-        # 画像をアップロード
-        uploaded_images = []
-        for idx, img in enumerate(all_images):
+        # 画像をBase64エンコードしてインライン画像として送信
+        image_parts = []
+        for img in all_images:
             # PILイメージをバイト配列に変換
             img_byte_arr = io.BytesIO()
             img.save(img_byte_arr, format='PNG')
             img_byte_arr.seek(0)
-            # ファイル名を指定してMIMEタイプを推測させる
-            img_byte_arr.name = f"image_{idx}.png"
-            uploaded_img = client.files.upload(file=img_byte_arr)
-            uploaded_images.append(uploaded_img)
+            # Base64エンコード
+            img_base64 = base64.b64encode(img_byte_arr.read()).decode('utf-8')
+            # インライン画像パートを作成
+            image_parts.append(
+                types.Part.from_bytes(
+                    data=base64.b64decode(img_base64),
+                    mime_type="image/png"
+                )
+            )
 
         # コンテンツを作成
         contents = [
             types.Content(
                 role="user",
-                parts=[types.Part.from_text(text=EXTRACTION_PROMPT)] +
-                      [types.Part.from_uri(file_uri=img.uri, mime_type=img.mime_type) for img in uploaded_images]
+                parts=[types.Part.from_text(text=EXTRACTION_PROMPT)] + image_parts
             )
         ]
 
