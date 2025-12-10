@@ -3,7 +3,8 @@ import google.generativeai as genai
 from PIL import Image
 import json
 import pandas as pd
-from typing import Dict, Any
+from typing import Dict, Any, List
+import io
 
 # ページ設定
 st.set_page_config(
@@ -13,7 +14,7 @@ st.set_page_config(
 )
 
 # タイトル
-st.title("🏥 医療紹介状→初診カルテ変換アプリ")
+st.title("🏥 医療紹介状→初診カルテ変換アプリ（複数ファイル対応版）")
 st.markdown("紹介状の画像またはテキストから初診カルテ形式で患者情報を自動抽出します")
 
 # APIキーの確認と設定
@@ -37,6 +38,8 @@ model = get_model()
 # プロンプトテンプレート
 EXTRACTION_PROMPT = """あなたは在宅医療の医師です。
 提供された「診療情報提供書（紹介状）」の内容を読み取り、訪問診療開始時の初診カルテに記載する形式でJSONデータを作成してください。
+
+複数の画像やページがある場合は、すべての情報を統合して1つの初診カルテとして出力してください。
 
 ## 制約事項
 - 出力はJSON形式のみとしてください。Markdownのコードブロックで囲わず、純粋なJSONのみを返してください。
@@ -225,10 +228,40 @@ EXTRACTION_PROMPT = """あなたは在宅医療の医師です。
 特にSOAP形式、病名の "#" 付与、MMSE得点、ADL詳細、ACPは重要です。
 """
 
-def extract_info_from_image(image: Image.Image) -> Dict[str, Any]:
-    """画像から情報を抽出"""
+def process_pdf_to_images(pdf_file) -> List[Image.Image]:
+    """PDFを画像のリストに変換"""
     try:
-        response = model.generate_content([EXTRACTION_PROMPT, image])
+        from pdf2image import convert_from_bytes
+        pdf_file.seek(0)
+        images = convert_from_bytes(pdf_file.read())
+        return images
+    except Exception as e:
+        st.error(f"PDF処理エラー: {str(e)}")
+        return []
+
+def extract_info_from_multiple_files(files: List) -> Dict[str, Any]:
+    """複数ファイルから情報を抽出"""
+    try:
+        # すべてのファイルを画像に変換
+        all_images = []
+        
+        for file in files:
+            file.seek(0)
+            if file.type == "application/pdf":
+                images = process_pdf_to_images(file)
+                all_images.extend(images)
+            else:
+                image = Image.open(file)
+                all_images.append(image)
+        
+        if not all_images:
+            st.error("画像の読み込みに失敗しました")
+            return None
+        
+        # プロンプトと全画像を送信
+        content = [EXTRACTION_PROMPT] + all_images
+        response = model.generate_content(content)
+        
         # レスポンステキストからJSONを抽出
         result_text = response.text.strip()
 
@@ -249,7 +282,7 @@ def extract_info_from_image(image: Image.Image) -> Dict[str, Any]:
         st.error(f"JSON解析エラー: {str(e)}\n\n取得したテキスト:\n{response.text}")
         return None
     except Exception as e:
-        st.error(f"画像処理エラー: {str(e)}")
+        st.error(f"ファイル処理エラー: {str(e)}")
         return None
 
 def extract_info_from_text(text: str) -> Dict[str, Any]:
@@ -861,42 +894,59 @@ tab1, tab2 = st.tabs(["📷 画像アップロード", "📝 テキスト入力"
 
 with tab1:
     st.markdown("### スマートフォンで撮影した紹介状の写真をアップロード")
-    uploaded_file = st.file_uploader(
-        "画像ファイルを選択してください",
+    st.info("💡 **複数のファイルを同時にアップロードできます！** 紹介状が複数ページに分かれている場合や、検査結果など関連資料がある場合に便利です。Ctrl/Cmd + クリックで複数選択できます。")
+    
+    uploaded_files = st.file_uploader(
+        "画像ファイルを選択してください（複数選択可）",
         type=["jpg", "jpeg", "png", "pdf"],
-        help="紹介状の写真またはPDFをアップロードしてください"
+        help="紹介状の写真またはPDFをアップロードしてください。Ctrl/Cmd + クリックで複数選択できます",
+        accept_multiple_files=True
     )
 
-    if uploaded_file is not None:
-        # 2カラムレイアウト
-        col1, col2 = st.columns([1, 1.5])
-
-        with col1:
-            st.subheader("📄 入力画像")
-            if uploaded_file.type == "application/pdf":
-                st.info("PDFファイルがアップロードされました")
-            else:
-                image = Image.open(uploaded_file)
-                st.image(image, use_container_width=True)
-
-        with col2:
-            if st.button("🔍 情報を抽出して初診カルテを作成", key="extract_image", type="primary"):
-                with st.spinner("AIが紹介状から情報を抽出中..."):
-                    if uploaded_file.type == "application/pdf":
-                        # PDFの場合は一旦画像として読み込む
-                        from pdf2image import convert_from_bytes
-                        images = convert_from_bytes(uploaded_file.read())
-                        if images:
-                            extracted_data = extract_info_from_image(images[0])
-                        else:
-                            st.error("PDFの読み込みに失敗しました")
-                            extracted_data = None
-                    else:
-                        image = Image.open(uploaded_file)
-                        extracted_data = extract_info_from_image(image)
-                    
-                    if extracted_data:
-                        display_results(extracted_data)
+    if uploaded_files:
+        # アップロードされたファイルの情報を表示
+        st.success(f"✅ {len(uploaded_files)}個のファイルがアップロードされました")
+        
+        with st.expander("📁 アップロードファイル一覧", expanded=True):
+            for i, file in enumerate(uploaded_files, 1):
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.write(f"**{i}. {file.name}**")
+                with col2:
+                    st.write(f"{file.size / 1024:.1f} KB")
+        
+        # プレビュー表示（最大6ファイルまで）
+        st.markdown("### 📸 プレビュー")
+        preview_files = uploaded_files[:6]
+        
+        if len(uploaded_files) <= 3:
+            cols = st.columns(len(uploaded_files))
+        else:
+            cols = st.columns(3)
+        
+        for idx, file in enumerate(preview_files):
+            col_idx = idx % 3
+            with cols[col_idx]:
+                if file.type == "application/pdf":
+                    st.info(f"📄 PDF: {file.name}")
+                else:
+                    file.seek(0)
+                    image = Image.open(file)
+                    st.image(image, caption=file.name, use_container_width=True)
+        
+        if len(uploaded_files) > 6:
+            st.info(f"その他 {len(uploaded_files) - 6} 個のファイル...")
+        
+        st.markdown("---")
+        
+        # 抽出ボタン
+        if st.button("🔍 全ファイルから情報を抽出して初診カルテを作成", key="extract_multiple", type="primary", use_container_width=True):
+            with st.spinner(f"AIが{len(uploaded_files)}個のファイルから情報を抽出中..."):
+                extracted_data = extract_info_from_multiple_files(uploaded_files)
+                
+                if extracted_data:
+                    st.success("✅ 情報抽出完了")
+                    display_results(extracted_data)
 
 with tab2:
     st.markdown("### 電子カルテからコピーしたテキストを貼り付け")
@@ -942,12 +992,51 @@ with tab2:
                     if extracted_data:
                         display_results(extracted_data)
 
+# 使い方
+with st.expander("📖 複数ファイルアップロードの使い方"):
+    st.markdown("""
+    ### 複数ファイル対応の便利な使い方
+
+    #### 📸 こんな場合に便利です
+    
+    1. **紹介状が複数ページに分かれている場合**
+       - 1ページ目: 患者基本情報
+       - 2ページ目: 検査結果
+       - 3ページ目: 処方内容
+       → すべてを一度にアップロードすれば、AIが統合して1つのカルテを作成
+
+    2. **関連資料が複数ある場合**
+       - 紹介状本体
+       - 血液検査結果
+       - 画像検査レポート
+       - 心電図結果
+       → 関連する全ての資料を一括処理
+
+    3. **写真が複数枚に分かれている場合**
+       - スマホで撮影した紹介状が複数枚
+       - PDFと画像が混在
+       → まとめてアップロードOK
+
+    #### 🖱️ 複数選択の方法
+    
+    - **Windows**: Ctrl + クリック
+    - **Mac**: Cmd + クリック
+    - **連続選択**: Shift + クリック
+    
+    #### ⚠️ 注意事項
+    
+    - アップロードできるファイル形式: JPG, PNG, PDF
+    - ファイルサイズは合計で20MB程度まで推奨
+    - AIはすべてのファイルを読み込んで、情報を統合します
+    - 同じ情報が複数回出現する場合、最も完全な情報が採用されます
+    """)
+
 # フッター
 st.markdown("---")
 st.markdown(
     """
     <div style='text-align: center; color: gray;'>
-    <small>医療ハッカソン デモアプリ | 実際の初診カルテ形式に準拠 | Powered by Google Gemini 2.5 Flash</small>
+    <small>医療ハッカソン デモアプリ | 複数ファイル同時処理対応 | 実際の初診カルテ形式に準拠 | Powered by Google Gemini 2.5 Flash</small>
     </div>
     """,
     unsafe_allow_html=True
