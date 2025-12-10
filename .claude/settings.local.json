@@ -13,7 +13,8 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(ls:*)",
-      "Bash(brew install:*)"
+      "Bash(brew install:*)",
+      "Bash(conda env list:*)"
     ],
     "deny": [],
     "ask": []
