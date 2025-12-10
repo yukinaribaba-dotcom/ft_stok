@@ -1,10 +1,12 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from PIL import Image
 import json
 import pandas as pd
 from typing import Dict, Any, List
 import io
+import os
 
 # ページ設定
 st.set_page_config(
@@ -19,21 +21,29 @@ st.markdown("紹介状の画像またはテキストから初診カルテ形式�
 
 # APIキーの確認と設定
 try:
-    api_key = st.secrets["GOOGLE_API_KEY"]
-    genai.configure(api_key=api_key)
+    # 環境変数から取得を試み、なければst.secretsから取得
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        api_key = st.secrets["GOOGLE_API_KEY"]
+
+    if not api_key:
+        raise KeyError("API key not found")
+
 except KeyError:
-    st.error("⚠️ Google API Keyが設定されていません。`secrets.toml`に`GOOGLE_API_KEY`を設定してください。")
+    st.error("⚠️ Google API Keyが設定されていません。環境変数`GEMINI_API_KEY`または`secrets.toml`に`GOOGLE_API_KEY`を設定してください。")
     st.stop()
 except Exception as e:
     st.error(f"⚠️ API設定エラー: {str(e)}")
     st.stop()
 
-# Geminiモデルの初期化
+# Geminiクライアントとモデルの初期化
 @st.cache_resource
-def get_model():
-    return genai.GenerativeModel('gemini-2.5-flash')
+def get_client_and_model():
+    client = genai.Client(api_key=api_key)
+    model = "gemini-3-pro-preview"
+    return client, model
 
-model = get_model()
+client, model = get_client_and_model()
 
 # プロンプトテンプレート
 EXTRACTION_PROMPT = """あなたは在宅医療の医師です。
@@ -244,7 +254,7 @@ def extract_info_from_multiple_files(files: List) -> Dict[str, Any]:
     try:
         # すべてのファイルを画像に変換
         all_images = []
-        
+
         for file in files:
             file.seek(0)
             if file.type == "application/pdf":
@@ -253,15 +263,43 @@ def extract_info_from_multiple_files(files: List) -> Dict[str, Any]:
             else:
                 image = Image.open(file)
                 all_images.append(image)
-        
+
         if not all_images:
             st.error("画像の読み込みに失敗しました")
             return None
-        
-        # プロンプトと全画像を送信
-        content = [EXTRACTION_PROMPT] + all_images
-        response = model.generate_content(content)
-        
+
+        # 画像をアップロード
+        uploaded_images = []
+        for img in all_images:
+            # PILイメージをバイト配列に変換
+            img_byte_arr = io.BytesIO()
+            img.save(img_byte_arr, format='PNG')
+            img_byte_arr.seek(0)
+            uploaded_img = client.files.upload(file=img_byte_arr)
+            uploaded_images.append(uploaded_img)
+
+        # コンテンツを作成
+        contents = [
+            types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=EXTRACTION_PROMPT)] +
+                      [types.Part.from_uri(file_uri=img.uri, mime_type=img.mime_type) for img in uploaded_images]
+            )
+        ]
+
+        # 生成設定
+        generate_content_config = types.GenerateContentConfig(
+            response_mime_type="application/json",
+            thinking_config={"thinking_level": "HIGH"}
+        )
+
+        # コンテンツ生成
+        response = client.models.generate_content(
+            model=model,
+            contents=contents,
+            config=generate_content_config
+        )
+
         # レスポンステキストからJSONを抽出
         result_text = response.text.strip()
 
@@ -289,7 +327,27 @@ def extract_info_from_text(text: str) -> Dict[str, Any]:
     """テキストから情報を抽出"""
     try:
         prompt = EXTRACTION_PROMPT + f"\n\n入力テキスト:\n{text}"
-        response = model.generate_content(prompt)
+
+        # コンテンツを作成
+        contents = [
+            types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=prompt)]
+            )
+        ]
+
+        # 生成設定
+        generate_content_config = types.GenerateContentConfig(
+            response_mime_type="application/json",
+            thinking_config={"thinking_level": "HIGH"}
+        )
+
+        # コンテンツ生成
+        response = client.models.generate_content(
+            model=model,
+            contents=contents,
+            config=generate_content_config
+        )
 
         # レスポンステキストからJSONを抽出
         result_text = response.text.strip()

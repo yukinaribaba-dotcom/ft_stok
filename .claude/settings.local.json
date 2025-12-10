@@ -12,7 +12,8 @@
       "Bash(STREAMLIT_SERVER_HEADLESS=true streamlit run:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(brew install:*)"
     ],
     "deny": [],
     "ask": []
