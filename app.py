@@ -288,257 +288,573 @@ def display_results(data: Dict[str, Any]):
 
     st.subheader("📋 初診カルテ")
 
-    # 患者基本情報
-    st.markdown("### 👤 患者基本情報")
-    if "patient_info" in data:
-        info = data["patient_info"]
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("氏名", info.get("name", ""))
-        with col2:
-            st.metric("生年月日", info.get("birth_date", ""))
-        with col3:
-            st.metric("年齢", info.get("age", ""))
-        with col4:
-            st.metric("性別", info.get("gender", ""))
+    # タブで「見やすい表示」と「テキスト生データ」を切り替え
+    tab1, tab2 = st.tabs(["📋 カルテ表示", "📄 テキスト生データ"])
 
-    # バイタルサイン
-    if "vitals" in data and any(data["vitals"].values()):
-        st.markdown("### 📊 バイタルサイン")
-        vitals = data["vitals"]
-        cols = st.columns(6)
-        metrics = [
-            ("身長", vitals.get("height", "")),
-            ("体重", vitals.get("weight", "")),
-            ("血圧", vitals.get("blood_pressure", "")),
-            ("脈拍", vitals.get("pulse", "")),
-            ("体温", vitals.get("temperature", "")),
-            ("SpO2", vitals.get("spo2", ""))
-        ]
-        for col, (label, value) in zip(cols, metrics):
-            if value:
-                col.metric(label, value)
+    with tab1:
+        # === 患者基本情報 ===
+        st.markdown("### 👤 患者基本情報")
+        if "patient_info" in data:
+            info = data["patient_info"]
+            patient_info_md = f"""
+- **氏名**: {info.get("name", "未記載")}
+- **生年月日**: {info.get("birth_date", "未記載")}
+- **年齢**: {info.get("age", "未記載")}
+- **性別**: {info.get("gender", "未記載")}
+"""
+            st.markdown(patient_info_md)
+        st.markdown("---")
 
-    # SOAP
-    st.markdown("### 📝 SOAP")
-    if "soap" in data:
-        soap = data["soap"]
-        
-        # S (Subjective)
-        if soap.get("subjective"):
-            st.markdown("**■ S (Subjective - 主訴・患者の訴え)**")
-            st.write(soap["subjective"])
-        
-        # O (Objective)
-        if "objective" in soap:
-            st.markdown("**■ O (Objective - 客観的所見)**")
-            obj = soap["objective"]
-            if obj.get("consciousness"):
-                st.write(f"**意識レベル:** {obj['consciousness']}")
-            if obj.get("general_condition"):
-                st.write(f"**全身状態:** {obj['general_condition']}")
-            if obj.get("physical_exam"):
-                st.write(f"**身体所見:**")
-                st.write(obj["physical_exam"])
-            if obj.get("test_results"):
-                st.write(f"**検査結果:**")
-                st.write(obj["test_results"])
-        
-        # A (Assessment)
-        if soap.get("assessment"):
-            st.markdown("**■ A (Assessment - 評価)**")
-            st.write(soap["assessment"])
-        
-        # P (Plan)
-        if soap.get("plan"):
-            st.markdown("**■ P (Plan - 計画)**")
-            st.write(soap["plan"])
+        # === バイタルサイン ===
+        if "vitals" in data and any(data["vitals"].values()):
+            st.markdown("### 📊 バイタルサイン")
+            vitals = data["vitals"]
+            vital_items = []
+            if vitals.get("height"):
+                vital_items.append({"項目": "身長", "値": vitals["height"]})
+            if vitals.get("weight"):
+                vital_items.append({"項目": "体重", "値": vitals["weight"]})
+            if vitals.get("blood_pressure"):
+                vital_items.append({"項目": "血圧", "値": vitals["blood_pressure"]})
+            if vitals.get("pulse"):
+                vital_items.append({"項目": "脈拍", "値": vitals["pulse"]})
+            if vitals.get("temperature"):
+                vital_items.append({"項目": "体温", "値": vitals["temperature"]})
+            if vitals.get("spo2"):
+                vital_items.append({"項目": "SpO2", "値": vitals["spo2"]})
 
-    # 病名
-    if "diagnosis" in data and data["diagnosis"]:
-        st.markdown("### 🏥 病名")
-        for dx in data["diagnosis"]:
-            st.write(f"- {dx}")
+            if vital_items:
+                st.table(pd.DataFrame(vital_items))
+            st.markdown("---")
 
-    # 経過概略
-    if "clinical_course" in data:
-        st.markdown("### 📅 経過概略")
-        course = data["clinical_course"]
-        if course.get("onset_and_progress"):
-            st.write(f"**発症と経過:** {course['onset_and_progress']}")
-        if course.get("reason_for_referral"):
-            st.write(f"**紹介理由:** {course['reason_for_referral']}")
-        if course.get("recent_changes"):
-            st.write(f"**最近の変化:** {course['recent_changes']}")
+        # === 病名 ===
+        if "diagnosis" in data and data["diagnosis"]:
+            st.markdown("### 🏥 病名")
+            for dx in data["diagnosis"]:
+                st.markdown(f"- {dx}")
+            st.markdown("---")
 
-    # 既往歴・アレルギー・生活歴
-    col1, col2 = st.columns(2)
-    
-    with col1:
+        # === SOAP ===
+        st.markdown("### 📝 SOAP")
+        if "soap" in data:
+            soap = data["soap"]
+
+            # S (Subjective)
+            if soap.get("subjective"):
+                st.markdown("**■ S (Subjective - 主訴・患者の訴え)**")
+                st.markdown(f"> {soap['subjective']}")
+                st.write("")
+
+            # O (Objective)
+            if "objective" in soap:
+                st.markdown("**■ O (Objective - 客観的所見)**")
+                obj = soap["objective"]
+                obj_items = []
+                if obj.get("consciousness"):
+                    obj_items.append(f"- **意識レベル**: {obj['consciousness']}")
+                if obj.get("general_condition"):
+                    obj_items.append(f"- **全身状態**: {obj['general_condition']}")
+                if obj.get("physical_exam"):
+                    obj_items.append(f"- **身体所見**: {obj['physical_exam']}")
+                if obj.get("test_results"):
+                    obj_items.append(f"- **検査結果**: {obj['test_results']}")
+
+                for item in obj_items:
+                    st.markdown(item)
+                st.write("")
+
+            # A (Assessment)
+            if soap.get("assessment"):
+                st.markdown("**■ A (Assessment - 評価)**")
+                st.markdown(f"> {soap['assessment']}")
+                st.write("")
+
+            # P (Plan)
+            if soap.get("plan"):
+                st.markdown("**■ P (Plan - 計画)**")
+                st.markdown(f"> {soap['plan']}")
+                st.write("")
+        st.markdown("---")
+
+        # === 経過概略 ===
+        if "clinical_course" in data:
+            course = data["clinical_course"]
+            if any(course.values()):
+                st.markdown("### 📅 経過概略")
+                if course.get("onset_and_progress"):
+                    st.markdown(f"**発症と経過**  \n{course['onset_and_progress']}")
+                if course.get("reason_for_referral"):
+                    st.markdown(f"**紹介理由**  \n{course['reason_for_referral']}")
+                if course.get("recent_changes"):
+                    st.markdown(f"**最近の変化**  \n{course['recent_changes']}")
+                st.markdown("---")
+
+        # === 既往歴 ===
         if "past_medical_history" in data and data["past_medical_history"]:
             st.markdown("### 🏥 既往歴")
             for history in data["past_medical_history"]:
-                st.write(f"- {history}")
-        
+                st.markdown(f"- {history}")
+            st.markdown("---")
+
+        # === アレルギー ===
         if "allergies" in data:
-            st.markdown("### ⚠️ アレルギー")
             allergies = data["allergies"]
-            allergy_data = []
-            if allergies.get("drug_allergies"):
-                allergy_data.append({"種類": "薬剤", "内容": allergies["drug_allergies"]})
-            if allergies.get("food_allergies"):
-                allergy_data.append({"種類": "食物", "内容": allergies["food_allergies"]})
-            if allergies.get("asthma"):
-                allergy_data.append({"種類": "喘息", "内容": allergies["asthma"]})
-            if allergy_data:
-                st.dataframe(pd.DataFrame(allergy_data), use_container_width=True, hide_index=True)
-        
+            if any(allergies.values()):
+                st.markdown("### ⚠️ アレルギー")
+                allergy_items = []
+                if allergies.get("drug_allergies"):
+                    allergy_items.append({"種類": "薬剤", "内容": allergies["drug_allergies"]})
+                if allergies.get("food_allergies"):
+                    allergy_items.append({"種類": "食物", "内容": allergies["food_allergies"]})
+                if allergies.get("asthma"):
+                    allergy_items.append({"種類": "喘息", "内容": allergies["asthma"]})
+                if allergy_items:
+                    st.table(pd.DataFrame(allergy_items))
+                st.markdown("---")
+
+        # === 副作用歴 ===
         if data.get("adverse_drug_reactions"):
             st.markdown("### 💊 副作用歴")
-            st.write(data["adverse_drug_reactions"])
-    
-    with col2:
+            st.markdown(f"- {data['adverse_drug_reactions']}")
+            st.markdown("---")
+
+        # === 生活歴 ===
         if "lifestyle" in data:
-            st.markdown("### 🚬 生活歴")
             lifestyle = data["lifestyle"]
-            lifestyle_data = []
-            if lifestyle.get("smoking"):
-                lifestyle_data.append({"項目": "喫煙", "内容": lifestyle["smoking"]})
-            if lifestyle.get("alcohol"):
-                lifestyle_data.append({"項目": "飲酒", "内容": lifestyle["alcohol"]})
-            if lifestyle.get("occupation"):
-                lifestyle_data.append({"項目": "職業", "内容": lifestyle["occupation"]})
-            if lifestyle_data:
-                st.dataframe(pd.DataFrame(lifestyle_data), use_container_width=True, hide_index=True)
-        
+            if any(lifestyle.values()):
+                st.markdown("### 🚬 生活歴")
+                lifestyle_items = []
+                if lifestyle.get("smoking"):
+                    lifestyle_items.append({"項目": "喫煙", "内容": lifestyle["smoking"]})
+                if lifestyle.get("alcohol"):
+                    lifestyle_items.append({"項目": "飲酒", "内容": lifestyle["alcohol"]})
+                if lifestyle.get("occupation"):
+                    lifestyle_items.append({"項目": "職業", "内容": lifestyle["occupation"]})
+                if lifestyle_items:
+                    st.table(pd.DataFrame(lifestyle_items))
+                st.markdown("---")
+
+        # === 感染症 ===
         if data.get("infectious_disease"):
             st.markdown("### 🦠 感染症")
-            st.write(data["infectious_disease"])
+            st.markdown(f"- {data['infectious_disease']}")
+            st.markdown("---")
 
-    # ADL・IADL
-    st.markdown("### 🚶 ADL・IADL")
-    if "adl" in data:
-        adl = data["adl"]
-        adl_data = []
-        if adl.get("walking"):
-            adl_data.append({"項目": "歩行", "状態": adl["walking"]})
-        if adl.get("feeding"):
-            adl_data.append({"項目": "食事", "状態": adl["feeding"]})
-        if adl.get("excretion"):
-            adl_data.append({"項目": "排泄", "状態": adl["excretion"]})
-        if adl.get("bathing"):
-            adl_data.append({"項目": "入浴", "状態": adl["bathing"]})
-        if adl.get("dressing"):
-            adl_data.append({"項目": "着衣", "状態": adl["dressing"]})
-        if adl.get("daily_activities"):
-            adl_data.append({"項目": "日常動作", "状態": adl["daily_activities"]})
-        if adl.get("iadl"):
-            adl_data.append({"項目": "IADL", "状態": adl["iadl"]})
-        if adl_data:
-            st.dataframe(pd.DataFrame(adl_data), use_container_width=True, hide_index=True)
-    
-    if data.get("independence_level"):
-        st.write(f"**自立度:** {data['independence_level']}")
+        # === ADL・IADL ===
+        st.markdown("### 🚶 ADL・IADL")
+        if "adl" in data:
+            adl = data["adl"]
+            adl_items = []
+            if adl.get("walking"):
+                adl_items.append({"項目": "歩行", "状態": adl["walking"]})
+            if adl.get("feeding"):
+                adl_items.append({"項目": "食事", "状態": adl["feeding"]})
+            if adl.get("excretion"):
+                adl_items.append({"項目": "排泄", "状態": adl["excretion"]})
+            if adl.get("bathing"):
+                adl_items.append({"項目": "入浴", "状態": adl["bathing"]})
+            if adl.get("dressing"):
+                adl_items.append({"項目": "着衣", "状態": adl["dressing"]})
+            if adl.get("daily_activities"):
+                adl_items.append({"項目": "日常動作", "状態": adl["daily_activities"]})
+            if adl.get("iadl"):
+                adl_items.append({"項目": "IADL", "状態": adl["iadl"]})
+            if adl_items:
+                st.table(pd.DataFrame(adl_items))
 
-    # 認知症評価
-    if "cognitive_status" in data:
-        st.markdown("### 🧠 認知症評価")
-        cog = data["cognitive_status"]
-        cog_data = []
-        if cog.get("dementia_presence"):
-            cog_data.append({"項目": "認知症の有無", "内容": cog["dementia_presence"]})
-        if cog.get("dementia_type"):
-            cog_data.append({"項目": "認知症の種類", "内容": cog["dementia_type"]})
-        if cog.get("severity"):
-            cog_data.append({"項目": "重症度", "内容": cog["severity"]})
-        if cog.get("mmse_score"):
-            cog_data.append({"項目": "MMSE", "内容": cog["mmse_score"]})
-        if cog.get("behavioral_symptoms"):
-            cog_data.append({"項目": "周辺症状(BPSD)", "内容": cog["behavioral_symptoms"]})
-        if cog_data:
-            st.dataframe(pd.DataFrame(cog_data), use_container_width=True, hide_index=True)
+        if data.get("independence_level"):
+            st.markdown(f"**自立度**: {data['independence_level']}")
+        st.markdown("---")
 
-    # 介護情報
-    if "care_info" in data:
-        st.markdown("### 👨‍👩‍👧‍👦 介護情報")
-        care = data["care_info"]
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if care.get("care_level"):
-                st.write(f"**要介護度:** {care['care_level']}")
-            if care.get("disability_certification"):
-                st.write(f"**障害認定:** {care['disability_certification']}")
-            if care.get("family_structure"):
-                st.write(f"**家族構成:** {care['family_structure']}")
-        
-        with col2:
-            if "key_person" in care:
-                kp = care["key_person"]
-                st.write("**キーパーソン**")
-                if kp.get("name"):
-                    st.write(f"- 氏名: {kp['name']}")
-                if kp.get("relation"):
-                    st.write(f"- 続柄: {kp['relation']}")
-                if kp.get("contact"):
-                    st.write(f"- 連絡先: {kp['contact']}")
-        
-        if care.get("preferred_location"):
-            st.write(f"**過ごしたい場所:** {care['preferred_location']}")
-        
-        if care.get("care_services"):
-            st.write("**利用中の介護サービス:**")
-            for service in care["care_services"]:
-                st.write(f"- {service}")
+        # === 認知症評価 ===
+        if "cognitive_status" in data:
+            cog = data["cognitive_status"]
+            if any(cog.values()):
+                st.markdown("### 🧠 認知症評価")
+                cog_items = []
+                if cog.get("dementia_presence"):
+                    cog_items.append({"項目": "認知症の有無", "内容": cog["dementia_presence"]})
+                if cog.get("dementia_type"):
+                    cog_items.append({"項目": "認知症の種類", "内容": cog["dementia_type"]})
+                if cog.get("severity"):
+                    cog_items.append({"項目": "重症度", "内容": cog["severity"]})
+                if cog.get("mmse_score"):
+                    cog_items.append({"項目": "MMSE", "内容": cog["mmse_score"]})
+                if cog.get("behavioral_symptoms"):
+                    cog_items.append({"項目": "周辺症状(BPSD)", "内容": cog["behavioral_symptoms"]})
+                if cog_items:
+                    st.table(pd.DataFrame(cog_items))
+                st.markdown("---")
 
-    # ACP（アドバンス・ケア・プランニング）
-    if "advance_care_planning" in data:
-        st.markdown("### 📋 ACP（アドバンス・ケア・プランニング）")
-        acp = data["advance_care_planning"]
-        acp_data = []
-        if acp.get("emergency_response"):
-            acp_data.append({"項目": "急変時対応", "内容": acp["emergency_response"]})
-        if acp.get("life_sustaining_treatment"):
-            acp_data.append({"項目": "延命治療", "内容": acp["life_sustaining_treatment"]})
-        if acp.get("tube_feeding"):
-            acp_data.append({"項目": "経管栄養・胃瘻", "内容": acp["tube_feeding"]})
-        if acp.get("acute_illness_treatment"):
-            acp_data.append({"項目": "急性疾患の治療", "内容": acp["acute_illness_treatment"]})
-        if acp.get("hospitalization_preference"):
-            acp_data.append({"項目": "入院の希望", "内容": acp["hospitalization_preference"]})
-        if acp.get("dnr_status"):
-            acp_data.append({"項目": "DNR", "内容": acp["dnr_status"]})
-        if acp.get("organ_donation"):
-            acp_data.append({"項目": "臓器提供", "内容": acp["organ_donation"]})
-        if acp.get("brain_bank"):
-            acp_data.append({"項目": "ブレインバンク", "内容": acp["brain_bank"]})
-        if acp.get("other_wishes"):
-            acp_data.append({"項目": "その他の希望", "内容": acp["other_wishes"]})
-        if acp_data:
-            st.dataframe(pd.DataFrame(acp_data), use_container_width=True, hide_index=True)
+        # === 介護情報 ===
+        if "care_info" in data:
+            care = data["care_info"]
+            if any([care.get("care_level"), care.get("disability_certification"),
+                   care.get("family_structure"), care.get("key_person"),
+                   care.get("preferred_location"), care.get("care_services")]):
+                st.markdown("### 👨‍👩‍👧‍👦 介護情報")
 
-    # 服薬情報
-    col1, col2 = st.columns(2)
-    with col1:
+                care_md_items = []
+                if care.get("care_level"):
+                    care_md_items.append(f"- **要介護度**: {care['care_level']}")
+                if care.get("disability_certification"):
+                    care_md_items.append(f"- **障害認定**: {care['disability_certification']}")
+                if care.get("family_structure"):
+                    care_md_items.append(f"- **家族構成**: {care['family_structure']}")
+                if care.get("preferred_location"):
+                    care_md_items.append(f"- **過ごしたい場所**: {care['preferred_location']}")
+
+                for item in care_md_items:
+                    st.markdown(item)
+
+                if "key_person" in care:
+                    kp = care["key_person"]
+                    if any(kp.values()):
+                        st.markdown("**キーパーソン**")
+                        if kp.get("name"):
+                            st.markdown(f"- 氏名: {kp['name']}")
+                        if kp.get("relation"):
+                            st.markdown(f"- 続柄: {kp['relation']}")
+                        if kp.get("contact"):
+                            st.markdown(f"- 連絡先: {kp['contact']}")
+
+                if care.get("care_services"):
+                    st.markdown("**利用中の介護サービス**")
+                    for service in care["care_services"]:
+                        st.markdown(f"- {service}")
+
+                st.markdown("---")
+
+        # === ACP ===
+        if "advance_care_planning" in data:
+            acp = data["advance_care_planning"]
+            if any(acp.values()):
+                st.markdown("### 📋 ACP（アドバンス・ケア・プランニング）")
+                acp_items = []
+                if acp.get("emergency_response"):
+                    acp_items.append({"項目": "急変時対応", "内容": acp["emergency_response"]})
+                if acp.get("life_sustaining_treatment"):
+                    acp_items.append({"項目": "延命治療", "内容": acp["life_sustaining_treatment"]})
+                if acp.get("tube_feeding"):
+                    acp_items.append({"項目": "経管栄養・胃瘻", "内容": acp["tube_feeding"]})
+                if acp.get("acute_illness_treatment"):
+                    acp_items.append({"項目": "急性疾患の治療", "内容": acp["acute_illness_treatment"]})
+                if acp.get("hospitalization_preference"):
+                    acp_items.append({"項目": "入院の希望", "内容": acp["hospitalization_preference"]})
+                if acp.get("dnr_status"):
+                    acp_items.append({"項目": "DNR", "内容": acp["dnr_status"]})
+                if acp.get("organ_donation"):
+                    acp_items.append({"項目": "臓器提供", "内容": acp["organ_donation"]})
+                if acp.get("brain_bank"):
+                    acp_items.append({"項目": "ブレインバンク", "内容": acp["brain_bank"]})
+                if acp.get("other_wishes"):
+                    acp_items.append({"項目": "その他の希望", "内容": acp["other_wishes"]})
+                if acp_items:
+                    st.table(pd.DataFrame(acp_items))
+                st.markdown("---")
+
+        # === 服薬情報 ===
         if "current_medications" in data and data["current_medications"]:
             st.markdown("### 💊 定期内服薬")
             for med in data["current_medications"]:
-                st.write(f"- {med}")
-    
-    with col2:
+                st.markdown(f"- {med}")
+            st.markdown("---")
+
         if "prn_medications" in data and data["prn_medications"]:
             st.markdown("### 💊 頓服・屯用薬")
             for med in data["prn_medications"]:
-                st.write(f"- {med}")
+                st.markdown(f"- {med}")
+            st.markdown("---")
 
-    # 治療計画
-    if data.get("treatment_plan"):
-        st.markdown("### 📋 治療計画")
-        st.write(data["treatment_plan"])
+        # === 治療計画 ===
+        if data.get("treatment_plan"):
+            st.markdown("### 📋 治療計画")
+            st.markdown(data["treatment_plan"])
+            st.markdown("---")
 
-    # JSON形式でも表示（開発者向け）
-    with st.expander("🔧 JSON形式で表示（開発者向け）"):
-        st.json(data)
+    with tab2:
+        # テキスト生データ表示（コピペしやすい形式）
+        st.markdown("### 📄 テキスト生データ（コピペ用）")
+
+        text_output = []
+
+        # 患者基本情報
+        if "patient_info" in data:
+            text_output.append("=" * 60)
+            text_output.append("【患者基本情報】")
+            text_output.append("=" * 60)
+            info = data["patient_info"]
+            text_output.append(f"氏名: {info.get('name', '')}")
+            text_output.append(f"生年月日: {info.get('birth_date', '')}")
+            text_output.append(f"年齢: {info.get('age', '')}")
+            text_output.append(f"性別: {info.get('gender', '')}")
+            text_output.append("")
+
+        # バイタルサイン
+        if "vitals" in data and any(data["vitals"].values()):
+            text_output.append("=" * 60)
+            text_output.append("【バイタルサイン】")
+            text_output.append("=" * 60)
+            vitals = data["vitals"]
+            if vitals.get("height"):
+                text_output.append(f"身長: {vitals['height']}")
+            if vitals.get("weight"):
+                text_output.append(f"体重: {vitals['weight']}")
+            if vitals.get("blood_pressure"):
+                text_output.append(f"血圧: {vitals['blood_pressure']}")
+            if vitals.get("pulse"):
+                text_output.append(f"脈拍: {vitals['pulse']}")
+            if vitals.get("temperature"):
+                text_output.append(f"体温: {vitals['temperature']}")
+            if vitals.get("spo2"):
+                text_output.append(f"SpO2: {vitals['spo2']}")
+            text_output.append("")
+
+        # 病名
+        if "diagnosis" in data and data["diagnosis"]:
+            text_output.append("=" * 60)
+            text_output.append("【病名】")
+            text_output.append("=" * 60)
+            for dx in data["diagnosis"]:
+                text_output.append(dx)
+            text_output.append("")
+
+        # SOAP
+        if "soap" in data:
+            text_output.append("=" * 60)
+            text_output.append("【SOAP】")
+            text_output.append("=" * 60)
+            soap = data["soap"]
+            if soap.get("subjective"):
+                text_output.append("■ S (Subjective - 主訴)")
+                text_output.append(soap["subjective"])
+                text_output.append("")
+
+            if "objective" in soap:
+                text_output.append("■ O (Objective - 客観的所見)")
+                obj = soap["objective"]
+                if obj.get("consciousness"):
+                    text_output.append(f"意識レベル: {obj['consciousness']}")
+                if obj.get("general_condition"):
+                    text_output.append(f"全身状態: {obj['general_condition']}")
+                if obj.get("physical_exam"):
+                    text_output.append(f"身体所見: {obj['physical_exam']}")
+                if obj.get("test_results"):
+                    text_output.append(f"検査結果: {obj['test_results']}")
+                text_output.append("")
+
+            if soap.get("assessment"):
+                text_output.append("■ A (Assessment - 評価)")
+                text_output.append(soap["assessment"])
+                text_output.append("")
+
+            if soap.get("plan"):
+                text_output.append("■ P (Plan - 計画)")
+                text_output.append(soap["plan"])
+                text_output.append("")
+
+        # 経過概略
+        if "clinical_course" in data:
+            course = data["clinical_course"]
+            if any(course.values()):
+                text_output.append("=" * 60)
+                text_output.append("【経過概略】")
+                text_output.append("=" * 60)
+                if course.get("onset_and_progress"):
+                    text_output.append(f"発症と経過: {course['onset_and_progress']}")
+                if course.get("reason_for_referral"):
+                    text_output.append(f"紹介理由: {course['reason_for_referral']}")
+                if course.get("recent_changes"):
+                    text_output.append(f"最近の変化: {course['recent_changes']}")
+                text_output.append("")
+
+        # 既往歴
+        if "past_medical_history" in data and data["past_medical_history"]:
+            text_output.append("=" * 60)
+            text_output.append("【既往歴】")
+            text_output.append("=" * 60)
+            for history in data["past_medical_history"]:
+                text_output.append(f"- {history}")
+            text_output.append("")
+
+        # アレルギー
+        if "allergies" in data and any(data["allergies"].values()):
+            text_output.append("=" * 60)
+            text_output.append("【アレルギー】")
+            text_output.append("=" * 60)
+            allergies = data["allergies"]
+            if allergies.get("drug_allergies"):
+                text_output.append(f"薬剤: {allergies['drug_allergies']}")
+            if allergies.get("food_allergies"):
+                text_output.append(f"食物: {allergies['food_allergies']}")
+            if allergies.get("asthma"):
+                text_output.append(f"喘息: {allergies['asthma']}")
+            text_output.append("")
+
+        # 副作用歴
+        if data.get("adverse_drug_reactions"):
+            text_output.append("=" * 60)
+            text_output.append("【副作用歴】")
+            text_output.append("=" * 60)
+            text_output.append(data["adverse_drug_reactions"])
+            text_output.append("")
+
+        # 生活歴
+        if "lifestyle" in data and any(data["lifestyle"].values()):
+            text_output.append("=" * 60)
+            text_output.append("【生活歴】")
+            text_output.append("=" * 60)
+            lifestyle = data["lifestyle"]
+            if lifestyle.get("smoking"):
+                text_output.append(f"喫煙: {lifestyle['smoking']}")
+            if lifestyle.get("alcohol"):
+                text_output.append(f"飲酒: {lifestyle['alcohol']}")
+            if lifestyle.get("occupation"):
+                text_output.append(f"職業: {lifestyle['occupation']}")
+            text_output.append("")
+
+        # 感染症
+        if data.get("infectious_disease"):
+            text_output.append("=" * 60)
+            text_output.append("【感染症】")
+            text_output.append("=" * 60)
+            text_output.append(data["infectious_disease"])
+            text_output.append("")
+
+        # ADL
+        if "adl" in data and any(data["adl"].values()):
+            text_output.append("=" * 60)
+            text_output.append("【ADL・IADL】")
+            text_output.append("=" * 60)
+            adl = data["adl"]
+            if adl.get("walking"):
+                text_output.append(f"歩行: {adl['walking']}")
+            if adl.get("feeding"):
+                text_output.append(f"食事: {adl['feeding']}")
+            if adl.get("excretion"):
+                text_output.append(f"排泄: {adl['excretion']}")
+            if adl.get("bathing"):
+                text_output.append(f"入浴: {adl['bathing']}")
+            if adl.get("dressing"):
+                text_output.append(f"着衣: {adl['dressing']}")
+            if adl.get("daily_activities"):
+                text_output.append(f"日常動作: {adl['daily_activities']}")
+            if adl.get("iadl"):
+                text_output.append(f"IADL: {adl['iadl']}")
+            if data.get("independence_level"):
+                text_output.append(f"自立度: {data['independence_level']}")
+            text_output.append("")
+
+        # 認知症評価
+        if "cognitive_status" in data and any(data["cognitive_status"].values()):
+            text_output.append("=" * 60)
+            text_output.append("【認知症評価】")
+            text_output.append("=" * 60)
+            cog = data["cognitive_status"]
+            if cog.get("dementia_presence"):
+                text_output.append(f"認知症の有無: {cog['dementia_presence']}")
+            if cog.get("dementia_type"):
+                text_output.append(f"認知症の種類: {cog['dementia_type']}")
+            if cog.get("severity"):
+                text_output.append(f"重症度: {cog['severity']}")
+            if cog.get("mmse_score"):
+                text_output.append(f"MMSE: {cog['mmse_score']}")
+            if cog.get("behavioral_symptoms"):
+                text_output.append(f"周辺症状(BPSD): {cog['behavioral_symptoms']}")
+            text_output.append("")
+
+        # 介護情報
+        if "care_info" in data:
+            care = data["care_info"]
+            if any([care.get("care_level"), care.get("disability_certification"),
+                   care.get("family_structure"), care.get("key_person"),
+                   care.get("preferred_location"), care.get("care_services")]):
+                text_output.append("=" * 60)
+                text_output.append("【介護情報】")
+                text_output.append("=" * 60)
+                if care.get("care_level"):
+                    text_output.append(f"要介護度: {care['care_level']}")
+                if care.get("disability_certification"):
+                    text_output.append(f"障害認定: {care['disability_certification']}")
+                if care.get("family_structure"):
+                    text_output.append(f"家族構成: {care['family_structure']}")
+                if care.get("preferred_location"):
+                    text_output.append(f"過ごしたい場所: {care['preferred_location']}")
+
+                if "key_person" in care and any(care["key_person"].values()):
+                    text_output.append("キーパーソン:")
+                    kp = care["key_person"]
+                    if kp.get("name"):
+                        text_output.append(f"  氏名: {kp['name']}")
+                    if kp.get("relation"):
+                        text_output.append(f"  続柄: {kp['relation']}")
+                    if kp.get("contact"):
+                        text_output.append(f"  連絡先: {kp['contact']}")
+
+                if care.get("care_services"):
+                    text_output.append("利用中の介護サービス:")
+                    for service in care["care_services"]:
+                        text_output.append(f"  - {service}")
+                text_output.append("")
+
+        # ACP
+        if "advance_care_planning" in data and any(data["advance_care_planning"].values()):
+            text_output.append("=" * 60)
+            text_output.append("【ACP（アドバンス・ケア・プランニング）】")
+            text_output.append("=" * 60)
+            acp = data["advance_care_planning"]
+            if acp.get("emergency_response"):
+                text_output.append(f"急変時対応: {acp['emergency_response']}")
+            if acp.get("life_sustaining_treatment"):
+                text_output.append(f"延命治療: {acp['life_sustaining_treatment']}")
+            if acp.get("tube_feeding"):
+                text_output.append(f"経管栄養・胃瘻: {acp['tube_feeding']}")
+            if acp.get("acute_illness_treatment"):
+                text_output.append(f"急性疾患の治療: {acp['acute_illness_treatment']}")
+            if acp.get("hospitalization_preference"):
+                text_output.append(f"入院の希望: {acp['hospitalization_preference']}")
+            if acp.get("dnr_status"):
+                text_output.append(f"DNR: {acp['dnr_status']}")
+            if acp.get("organ_donation"):
+                text_output.append(f"臓器提供: {acp['organ_donation']}")
+            if acp.get("brain_bank"):
+                text_output.append(f"ブレインバンク: {acp['brain_bank']}")
+            if acp.get("other_wishes"):
+                text_output.append(f"その他の希望: {acp['other_wishes']}")
+            text_output.append("")
+
+        # 服薬情報
+        if "current_medications" in data and data["current_medications"]:
+            text_output.append("=" * 60)
+            text_output.append("【定期内服薬】")
+            text_output.append("=" * 60)
+            for med in data["current_medications"]:
+                text_output.append(f"- {med}")
+            text_output.append("")
+
+        if "prn_medications" in data and data["prn_medications"]:
+            text_output.append("=" * 60)
+            text_output.append("【頓服・屯用薬】")
+            text_output.append("=" * 60)
+            for med in data["prn_medications"]:
+                text_output.append(f"- {med}")
+            text_output.append("")
+
+        # 治療計画
+        if data.get("treatment_plan"):
+            text_output.append("=" * 60)
+            text_output.append("【治療計画】")
+            text_output.append("=" * 60)
+            text_output.append(data["treatment_plan"])
+            text_output.append("")
+
+        # テキストエリアに表示
+        full_text = "\n".join(text_output)
+        st.text_area("コピー可能なテキスト", value=full_text, height=600)
+
+        # JSON形式でも表示（開発者向け）
+        with st.expander("🔧 JSON形式で表示（開発者向け）"):
+            st.json(data)
 
 # メインコンテンツ
 tab1, tab2 = st.tabs(["📷 画像アップロード", "📝 テキスト入力"])
